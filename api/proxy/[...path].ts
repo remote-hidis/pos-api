@@ -9,21 +9,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const queryToken = req.query.token as string;
   const authHeader = req.headers['authorization'] || (queryToken ? `Bearer ${queryToken}` : undefined);
   
-  // URL cleanup
-  // req.url on Vercel contains everything. 
-  // Since we use a rewrite /api/proxy/:path* -> /api/proxy, we extract the path from the URL.
-  const url = req.url || '';
-  // Remove /api/proxy prefix to get the actual API path for the backend
-  const apiPath = url.replace('/api/proxy', '').split('?')[0];
+  // URL cleanup for dynamic route [...path]
+  const pathSegments = req.query.path as string[];
+  const apiPath = '/' + (pathSegments ? pathSegments.join('/') : '');
   
   const cleanBaseUrl = targetBaseUrl.endsWith('/') ? targetBaseUrl.slice(0, -1) : targetBaseUrl;
   
   // Reconstruct query parameters from req.url
   const urlParts = (req.url || '').split('?');
   const queryString = urlParts.length > 1 ? '?' + urlParts[1] : '';
-  const finalUrl = `${cleanBaseUrl}${apiPath}${queryString}`;
+  
+  // Smart merge to avoid double /api
+  let finalUrl;
+  if (cleanBaseUrl.endsWith('/api') && apiPath.startsWith('/api/')) {
+    finalUrl = `${cleanBaseUrl}${apiPath.substring(4)}${queryString}`;
+  } else {
+    finalUrl = `${cleanBaseUrl}${apiPath}${queryString}`;
+  }
 
-  console.log(`[Vercel Proxy] ${req.method} ${apiPath} -> ${finalUrl}`);
+  console.log(`[Vercel Proxy Dynamic] ${req.method} ${apiPath} -> ${finalUrl}`);
 
   try {
     const options: RequestInit = {
@@ -41,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const response = await fetch(finalUrl, options);
     
     // PDF Logic for Print
-    if (apiPath.startsWith('/sales/print/') && response.ok) {
+    if (apiPath.includes('/sales/print/') && response.ok) {
       const result = await response.json();
       if (result.success && result.data) {
         const data = result.data;
@@ -56,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
         doc.pipe(res);
         
-        // Render PDF (Copy logic from server.ts)
+        // Render PDF 
         doc.fontSize(10).font('Helvetica-Bold').text(data.store_name.toUpperCase(), { align: 'center' });
         doc.fontSize(6).font('Helvetica').text(data.store_address, { align: 'center' });
         doc.moveDown(0.5);
@@ -118,15 +122,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const contentType = response.headers.get("content-type");
-    let data;
+    let responseData;
     if (contentType && contentType.includes("application/json")) {
-      data = await response.json();
+      responseData = await response.json();
     } else {
       const textData = await response.text();
-      data = { message: textData };
+      responseData = { message: textData };
     }
 
-    res.status(response.status).json(data);
+    res.status(response.status).json(responseData);
   } catch (error: any) {
     console.error("[Vercel Proxy Error]:", error);
     res.status(500).json({ 

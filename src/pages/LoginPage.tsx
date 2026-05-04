@@ -19,7 +19,7 @@ export default function LoginPage() {
     setError(null);
     try {
       // Menggunakan Proxy Lokal untuk menghindari CORS
-      const response = await fetch(`/api/proxy/users/login`, {
+      const response = await fetch(`/api/proxy${LOGIN_ENDPOINT}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
