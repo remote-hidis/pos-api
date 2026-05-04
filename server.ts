@@ -12,15 +12,27 @@ async function startServer() {
   // GENERIC PROXY HANDLER (Handling users, sales, products, categories, etc.)
   app.use("/api/proxy", async (req, res) => {
     // 1. Dapatkan Target URL (Gunakan header atau fallback ke default)
-    const targetBaseUrl = (req.headers['x-target-base-url'] as string) || "https://pos-api.nganjuk.net/api";
+    let targetBaseUrl = (req.query.target as string) || (req.headers['x-target-base-url'] as string) || "https://api-pos.nganjuk.net";
+    
+    // Auto-correct old domain
+    if (targetBaseUrl.includes('pos-api.nganjuk.net')) {
+      targetBaseUrl = targetBaseUrl.replace('pos-api.nganjuk.net', 'api-pos.nganjuk.net');
+    }
+
     // Ambil token dari header atau query string (untuk window.open)
     const queryToken = req.query.token as string;
     const authHeader = req.headers['authorization'] || (queryToken ? `Bearer ${queryToken}` : undefined);
     
     // In app.use, req.url is relative to /api/proxy
-    const apiPath = req.url.split('?')[0]; // Hilangkan query params untuk pengecekan path
+    const apiPath = req.url.split('?')[0]; 
     const cleanBaseUrl = targetBaseUrl.endsWith('/') ? targetBaseUrl.slice(0, -1) : targetBaseUrl;
-    const finalUrl = `${cleanBaseUrl}${req.url}`; // Gunakan req.url asli untuk forward query params ke backend jika perlu
+    
+    // Smart merge to avoid double /api
+    let relativePath = req.url;
+    if (cleanBaseUrl.endsWith('/api') && relativePath.startsWith('/api/')) {
+        relativePath = relativePath.substring(4);
+    }
+    const finalUrl = `${cleanBaseUrl}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
 
     console.log(`[Proxy] ${req.method} ${apiPath} -> ${finalUrl}`);
 
@@ -28,27 +40,29 @@ async function startServer() {
       const options: RequestInit = {
         method: req.method,
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': authHeader || ''
         }
       };
 
       // 3. Forward body untuk request yang membutuhkan data
       if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        options.headers = {
+          ...options.headers,
+          'Content-Type': 'application/json'
+        };
         options.body = JSON.stringify(req.body);
       }
 
       const response = await fetch(finalUrl, options);
-      console.log(`[Proxy] Status: ${response.status} ${response.statusText}`);
       
       // Khusus untuk endpoint print, jika user minta PDF (atau default untuk path ini)
-      if (apiPath.startsWith('/sales/print/') && response.ok) {
+      if (apiPath.includes('/sales/print/') && response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
           const data = result.data;
           // Ukuran kertas thermal 58mm (kurang lebih 164pt lebar)
           const doc = new PDFDocument({ 
-            size: [164, 400], 
+            size: [164, 450], 
             margin: 10,
             bufferPages: true 
           }); 
@@ -68,18 +82,18 @@ async function startServer() {
 
           // Info Transaksi
           doc.fontSize(6);
-          const tinfo = data.transaction_info || data.sale || data;
-          const tid = tinfo.id || data.id || '-';
+          const tinfo = data.transaction_info || {};
+          const tid = tinfo.id || '-';
           
-          const dateStr = (tinfo.created_at || tinfo.date) ? new Date(tinfo.created_at || tinfo.date).toLocaleString('id-ID', {
+          const dateStr = tinfo.created_at ? new Date(tinfo.created_at).toLocaleString('id-ID', {
             dateStyle: 'short',
             timeStyle: 'short'
           }) : '-';
           
           doc.font('Helvetica-Bold').text('NO TRX  : ', { continued: true }).font('Helvetica').text(`#TRX-${tid}`);
           doc.font('Helvetica-Bold').text('TANGGAL : ', { continued: true }).font('Helvetica').text(dateStr);
-          doc.font('Helvetica-Bold').text('KASIR   : ', { continued: true }).font('Helvetica').text(tinfo.cashier_name || data.cashier_name || 'Admin');
-          doc.font('Helvetica-Bold').text('METODE  : ', { continued: true }).font('Helvetica').text(tinfo.payment_method || data.payment_method || 'Cash');
+          doc.font('Helvetica-Bold').text('KASIR   : ', { continued: true }).font('Helvetica').text(tinfo.cashier_name || 'Admin');
+          doc.font('Helvetica-Bold').text('METODE  : ', { continued: true }).font('Helvetica').text(tinfo.payment_method || 'Cash');
           
           doc.moveDown(0.5);
           doc.fontSize(6).text('-'.repeat(45), { align: 'center' });
@@ -88,19 +102,19 @@ async function startServer() {
           // Items Header
           doc.font('Helvetica-Bold');
           doc.text('ITEM', 10, doc.y, { width: 80, continued: true });
-          doc.text('QTY', 100, doc.y, { width: 20, align: 'center', continued: true });
-          doc.text('TOTAL', 120, doc.y, { width: 34, align: 'right' });
+          doc.text('QTY', 90, doc.y, { width: 20, align: 'center', continued: true });
+          doc.text('TOTAL', 115, doc.y, { width: 39, align: 'right' });
           doc.moveDown(0.2);
           doc.font('Helvetica');
 
           // Items Loop
-          const items = data.items || tinfo.items || [];
+          const items = data.items || [];
           items.forEach((item: any) => {
              const startY = doc.y;
-             doc.fontSize(6).text(item.product_name || item.name || 'Produk', 10, startY, { width: 80 });
+             doc.fontSize(6).text(item.product_name || 'Produk', 10, startY, { width: 80 });
              const nextY = doc.y;
-             doc.text((item.quantity || item.qty || 0).toString(), 100, startY, { width: 20, align: 'center' });
-             doc.text(Number(item.subtotal || item.total || 0).toLocaleString(), 120, startY, { width: 34, align: 'right' });
+             doc.text((item.quantity || 0).toString(), 90, startY, { width: 20, align: 'center' });
+             doc.text(Number(item.subtotal || 0).toLocaleString(), 115, startY, { width: 39, align: 'right' });
              doc.y = Math.max(nextY, startY + 8);
              doc.moveDown(0.1);
           });
@@ -110,14 +124,14 @@ async function startServer() {
           doc.moveDown(0.5);
 
           // Total Section
-          const totalAmount = tinfo.total_amount || tinfo.total || data.total_amount || tinfo.grand_total || 0;
+          const totalAmount = tinfo.total_amount || 0;
           doc.fontSize(8).font('Helvetica-Bold').text('TOTAL HARGA', 10, doc.y, { continued: true });
-          doc.text(`Rp ${Number(totalAmount).toLocaleString()}`, 10, doc.y, { align: 'right' });
+          doc.text(`Rp ${Number(totalAmount).toLocaleString()}`, 115, doc.y, { align: 'right' });
           
           doc.moveDown(1.5);
           doc.fontSize(6).font('Helvetica-Oblique').text(data.footer || 'Terima Kasih Atas Kunjungan Anda!', { align: 'center' });
           doc.moveDown(0.5);
-          doc.fillColor('#999999').fontSize(5).text('Power by Kopi Nganjuk POS', { align: 'center' });
+          doc.fillColor('#999999').fontSize(5).text('Powered by Kopi Nganjuk POS', { align: 'center' });
           doc.fillColor('black'); // Reset color 
           
           doc.end();

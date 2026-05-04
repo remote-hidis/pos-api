@@ -26,7 +26,7 @@ function UserManajemen() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/proxy/users', {
+      const response = await fetch('/api/proxy/api/users', {
         headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
       });
       const result = await response.json();
@@ -64,7 +64,7 @@ function UserManajemen() {
 
     setIsSubmitting(true);
     try {
-      const url = editingId !== null ? `/api/proxy/users/${editingId}` : '/api/proxy/users';
+      const url = editingId !== null ? `/api/proxy/api/users/${editingId}` : '/api/proxy/api/users';
       const method = editingId !== null ? 'PUT' : 'POST';
       
       const payload = { 
@@ -100,7 +100,7 @@ function UserManajemen() {
   const handleDelete = async (id: number) => {
     if (!confirm('Yakin ingin menghapus user ini?')) return;
     try {
-      const response = await fetch(`/api/proxy/users/${id}`, {
+      const response = await fetch(`/api/proxy/api/users/${id}`, {
         method: 'DELETE',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -259,7 +259,7 @@ function KategoriManajemen() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/proxy/categories', {
+      const response = await fetch('/api/proxy/api/categories', {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'x-target-base-url': baseUrl 
@@ -290,7 +290,7 @@ function KategoriManajemen() {
     if (!newCatName.trim()) return;
     setIsSubmitting(true);
     try {
-      const url = editingId !== null ? `/api/proxy/categories/${editingId}` : '/api/proxy/categories';
+      const url = editingId !== null ? `/api/proxy/api/categories/${editingId}` : '/api/proxy/api/categories';
       const method = editingId !== null ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
@@ -320,7 +320,7 @@ function KategoriManajemen() {
   const handleDelete = async (id: number | string) => {
     if (!confirm('Hapus kategori ini? Pastikan tidak ada produk yang menggunakan kategori ini.')) return;
     try {
-      const response = await fetch(`/api/proxy/categories/${id}`, {
+      const response = await fetch(`/api/proxy/api/categories/${id}`, {
         method: 'DELETE',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -448,10 +448,10 @@ function ProdukManajemen() {
     setLoading(true);
     try {
       const [prodRes, catRes] = await Promise.all([
-        fetch('/api/proxy/products', {
+        fetch('/api/proxy/api/products', {
           headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
         }),
-        fetch('/api/proxy/categories', {
+        fetch('/api/proxy/api/categories', {
           headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
         })
       ]);
@@ -492,7 +492,7 @@ function ProdukManajemen() {
 
     setIsSubmitting(true);
     try {
-      const url = editingId !== null ? `/api/proxy/products/${editingId}` : '/api/proxy/products';
+      const url = editingId !== null ? `/api/proxy/api/products/${editingId}` : '/api/proxy/api/products';
       const method = editingId !== null ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
@@ -527,7 +527,7 @@ function ProdukManajemen() {
   const handleDelete = async (id: number | string) => {
     if (!confirm('Yakin ingin menghapus produk ini? Tindakan ini tidak dapat dibatalkan.')) return;
     try {
-      const response = await fetch(`/api/proxy/products/${id}`, {
+      const response = await fetch(`/api/proxy/api/products/${id}`, {
         method: 'DELETE',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -687,7 +687,7 @@ function BerandaKasir({ onAddToCart }: { onAddToCart: (p: any) => void }) {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('/api/proxy/products', {
+        const response = await fetch('/api/proxy/api/products', {
           headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
         });
         const result = await response.json();
@@ -795,7 +795,7 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
     if (cart.length === 0) return;
     setIsProcessing(true);
     try {
-      const response = await fetch('/api/proxy/sales/checkout', {
+      const response = await fetch('/api/proxy/api/sales/checkout', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -847,7 +847,7 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
 
       // Arahkan ke print jika diinginkan
       if (shouldPrint && saleId) {
-        window.open(`/api/proxy/sales/print/${saleId}?token=${token}`, '_blank');
+        window.open(`/api/proxy/api/sales/print/${saleId}?token=${token}&target=${encodeURIComponent(baseUrl)}`, '_blank');
       }
 
       onClear();
@@ -982,10 +982,10 @@ function Riwayat() {
     setLoading(true);
     try {
       const [histRes, recapRes] = await Promise.all([
-        fetch('/api/proxy/sales/history', {
+        fetch('/api/proxy/api/sales/history', {
           headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
         }),
-        fetch('/api/proxy/sales/recap/daily', {
+        fetch('/api/proxy/api/sales/recap/daily', {
           headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
         }).catch(() => null)
       ]);
@@ -1013,7 +1013,7 @@ function Riwayat() {
     setSelectedSale(sale);
     setDetailLoading(true);
     try {
-      const response = await fetch(`/api/proxy/sales/history/${sale.id || sale.sale_id}`, {
+      const response = await fetch(`/api/proxy/api/sales/history/${sale.id || sale.sale_id}`, {
         headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
       });
       const result = await response.json();
@@ -1170,7 +1170,7 @@ function Riwayat() {
                       <button 
                         onClick={() => {
                           const saleId = selectedSale.id || selectedSale.sale_id;
-                          window.open(`/api/proxy/sales/print/${saleId}?token=${token}`, '_blank');
+                          window.open(`/api/proxy/api/sales/print/${saleId}?token=${token}&target=${encodeURIComponent(baseUrl)}`, '_blank');
                         }}
                         className="h-14 px-8 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-200 active:scale-95 transition-all"
                       >

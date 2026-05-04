@@ -15,7 +15,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('pos_token'));
-  const [baseUrl, setBaseUrl] = useState<string>(localStorage.getItem('pos_base_url') || DEFAULT_API_BASE_URL);
+  const [baseUrl, setBaseUrl] = useState<string>(() => {
+    const saved = localStorage.getItem('pos_base_url');
+    // Migration for domain change
+    if (saved && (saved.includes('pos-api.nganjuk.net') || saved.endsWith('/api'))) {
+      const newUrl = DEFAULT_API_BASE_URL;
+      localStorage.setItem('pos_base_url', newUrl);
+      return newUrl;
+    }
+    return saved || DEFAULT_API_BASE_URL;
+  });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('pos_user');
