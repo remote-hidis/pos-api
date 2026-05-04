@@ -12,8 +12,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // URL cleanup
   // req.url on Vercel contains everything. 
   // For dynamic route api/proxy/[...path].ts, req.query.path is an array of segments.
-  const pathSegments = req.query.path as string[];
-  const apiPath = '/' + (pathSegments ? pathSegments.join('/') : '');
+  const pathSegments = (req.query.path as string[]) || [];
+  const apiPath = '/' + pathSegments.join('/');
   
   const cleanBaseUrl = targetBaseUrl.endsWith('/') ? targetBaseUrl.slice(0, -1) : targetBaseUrl;
   
