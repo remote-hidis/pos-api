@@ -3,7 +3,7 @@ import PDFDocument from "pdfkit";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 1. Dapatkan Target URL
-  const targetBaseUrl = (req.headers['x-target-base-url'] as string) || "https://pos-api.nganjuk.net/api";
+  const targetBaseUrl = (req.headers['x-target-base-url'] as string) || "https://api-pos.nganjuk.net/api";
   
   // Ambil token dari header atau query string
   const queryToken = req.query.token as string;
