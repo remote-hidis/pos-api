@@ -37,7 +37,11 @@ export default function LoginPage() {
         result = JSON.parse(responseText);
       } catch (e) {
         console.error("Non-JSON response:", responseText);
-        throw new Error('Respon server tidak valid (bukan JSON). Pastikan URL API dan Proxy benar.');
+        // Jika response diawali dengan <!DOCTYPE html, berarti kita menerima halaman HTML (biasanya 404 dari Vercel/Proxy)
+        if (responseText.trim().toLowerCase().startsWith('<!doctype html') || responseText.trim().toLowerCase().startsWith('<html')) {
+           throw new Error('Respon server adalah halaman HTML, bukan JSON. Ini biasanya terjadi jika URL API salah atau Proxy tidak ditemukan (404).');
+        }
+        throw new Error('Respon server tidak valid: ' + responseText.substring(0, 100) + '...');
       }
 
       if (!response.ok) {
