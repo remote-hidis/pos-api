@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, ClipboardList, History, Settings, LogOut, Search, User, Package, Plus, Edit2, Trash2, RefreshCcw } from 'lucide-react';
+import { Home, ClipboardList, History, Settings, LogOut, Search, User, Package, Plus, Edit2, Trash2, RefreshCcw, MessageSquare } from 'lucide-react';
 import { useAuth } from '../services/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -787,6 +787,7 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
   const [isProcessing, setIsProcessing] = useState(false);
   const [method, setMethod] = useState('Cash');
   const [shouldPrint, setShouldPrint] = useState(true);
+  const [waNumber, setWaNumber] = useState('');
 
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -813,10 +814,38 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Transaksi gagal');
       
+      // Robust extraction of ID
+      const saleId = result.data?.id || 
+                    result.sale?.id || 
+                    result.data?.sale?.id || 
+                    result.id || 
+                    (typeof result.data === 'number' || typeof result.data === 'string' ? result.data : undefined);
+      
+      // Kirim WhatsApp jika nomor diisi dan konfigurasi ada
+      const waBaseUrl = localStorage.getItem('wa_base_url');
+      const waApiKey = localStorage.getItem('wa_api_key');
+      const waMessageTemplate = localStorage.getItem('wa_message') || 'Halo, ini struk belanja Anda.';
+
+      if (waNumber && waApiKey && waBaseUrl) {
+        try {
+          const msg = `${waMessageTemplate}\n\nTotal: Rp${total.toLocaleString()}\nNo TRX: #TRX-${saleId}\nSilakan cek struk digital ini.`;
+          fetch(waBaseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: waApiKey,
+              numbers: waNumber,
+              message: msg
+            })
+          }).catch(e => console.error("WA error:", e));
+        } catch (e) {
+          console.error("Gagal kirim WA:", e);
+        }
+      }
+
       alert('Berhasil! ' + result.message);
 
       // Arahkan ke print jika diinginkan
-      const saleId = result.data?.id || (result.sale && result.sale.id);
       if (shouldPrint && saleId) {
         window.open(`/api/proxy/sales/print/${saleId}?token=${token}`, '_blank');
       }
@@ -870,6 +899,25 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+               <div className="h-10 w-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
+                  <MessageSquare className="h-5 w-5" />
+               </div>
+               <div>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-900">Kirim Struk WA</h4>
+                  <p className="text-[10px] text-slate-400 font-medium tracking-tight">Masukkan nomor tujuan (Opsional)</p>
+               </div>
+            </div>
+            <input 
+              type="text" 
+              placeholder="Contoh: 628123456789"
+              value={waNumber}
+              onChange={(e) => setWaNumber(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all placeholder:text-slate-300"
+            />
           </div>
 
           <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white">
@@ -1140,18 +1188,64 @@ function Riwayat() {
 }
 
 function Pengaturan() {
-  const { logout, baseUrl, user } = useAuth();
+  const { logout, baseUrl, updateBaseUrl, user } = useAuth();
   const isAdmin = user?.role === 'admin' || Number(user?.role_id) === 1;
   const roleLabel = isAdmin ? 'Owner / Admin' : 'Staff Kasir';
+
+  // API Base URL State
+  const [tempBaseUrl, setTempBaseUrl] = useState(baseUrl);
+
+  // Notification State
+  const [showNotification, setShowNotification] = useState(false);
+
+  // WhatsApp Settings State
+  const [waBaseUrl, setWaBaseUrl] = useState(localStorage.getItem('wa_base_url') || 'https://nganjuk.net/send-message');
+  const [waApiKey, setWaApiKey] = useState(localStorage.getItem('wa_api_key') || '');
+  const [waMessage, setWaMessage] = useState(localStorage.getItem('wa_message') || '');
+
+  const saveConfiguration = () => {
+    // Save API Base URL
+    updateBaseUrl(tempBaseUrl);
+    
+    // Save WA Settings
+    localStorage.setItem('wa_base_url', waBaseUrl);
+    localStorage.setItem('wa_api_key', waApiKey);
+    localStorage.setItem('wa_message', waMessage);
+    
+    setShowNotification(true);
+    setTimeout(() => setShowNotification(false), 3000);
+  };
   
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-32 relative">
+      <AnimatePresence>
+        {showNotification && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-4rem)] max-w-sm"
+          >
+            <div className="bg-slate-900 text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 border border-white/10 backdrop-blur-xl">
+               <div className="h-10 w-10 bg-green-500 rounded-2xl flex items-center justify-center shadow-lg shadow-green-500/40">
+                  <RefreshCcw className="h-5 w-5 text-white animate-spin-slow" />
+               </div>
+               <div>
+                  <p className="text-xs font-black uppercase tracking-widest">Berhasil!</p>
+                  <p className="text-[10px] text-slate-400 font-medium tracking-tight">Konfigurasi telah diperbarui</p>
+               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <header>
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Pengaturan</h2>
-        <p className="text-slate-500 text-sm">Sistem dan informasi akun</p>
+        <p className="text-slate-500 text-sm">Kelola akun dan integrasi sistem</p>
       </header>
 
-      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-8">
+      {/* Profil User */}
+      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
         <div className="flex items-center gap-5">
            <div className="h-20 w-20 rounded-3xl bg-blue-50 flex items-center justify-center text-blue-600 ring-4 ring-blue-50/50">
               <User className="h-10 w-10" />
@@ -1164,45 +1258,114 @@ function Pengaturan() {
               <p className="text-sm text-slate-500 font-medium">{roleLabel}</p>
            </div>
         </div>
-
-        <div className="space-y-5 pt-6 border-t border-slate-50">
-           <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Server API Aktif</label>
-              <div className="bg-slate-50 p-4 rounded-2xl text-xs font-mono text-slate-600 break-all border border-slate-100">
-                {baseUrl}
-              </div>
-           </div>
-
-           {(user?.role === 'admin' || Number(user?.role_id) === 1) && (
-             <Link 
-               to="/users"
-               className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors group"
-             >
-                <div className="flex items-center gap-3">
-                   <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600 shadow-sm transition-colors">
-                      <User className="h-5 w-5" />
-                   </div>
-                   <div>
-                      <p className="text-sm font-bold text-slate-800">Manajemen User</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Kelola Akun Kasir</p>
-                   </div>
-                </div>
-                <Plus className="h-4 w-4 text-slate-300" />
-             </Link>
-           )}
-           
-           <button 
-             onClick={logout}
-             className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-red-50 text-red-600 font-bold text-sm hover:bg-red-100 active:scale-[0.98] transition-all"
-           >
-              <LogOut className="h-5 w-5" />
-              Keluar dari Sistem
-           </button>
-        </div>
       </div>
 
-      <div className="text-center px-10">
-         <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em]">Nganjuk POS Mobile v1.0</p>
+      {/* API Configuration */}
+      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-6">
+         <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+               <Package className="h-6 w-6" />
+            </div>
+            <div>
+               <h3 className="font-bold text-lg text-slate-900 leading-tight">API Backend</h3>
+               <p className="text-xs text-slate-500 font-medium tracking-tight">Koneksi ke POS Server Aktif</p>
+            </div>
+         </div>
+         <div className="space-y-4 pt-4 border-t border-slate-50">
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Target Base URL</label>
+               <input 
+                 type="text" 
+                 value={tempBaseUrl}
+                 onChange={(e) => setTempBaseUrl(e.target.value)}
+                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
+               />
+            </div>
+         </div>
+      </div>
+
+      {/* WhatsApp Gateway */}
+      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-6">
+         <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600">
+               <MessageSquare className="h-6 w-6" />
+            </div>
+            <div>
+               <h3 className="font-bold text-lg text-slate-900 leading-tight">WA Gateway</h3>
+               <p className="text-xs text-slate-500 font-medium tracking-tight">Koneksi pengiriman struk otomatis</p>
+            </div>
+         </div>
+
+         <div className="space-y-4 pt-4 border-t border-slate-50">
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Gateway URL</label>
+               <input 
+                 type="text" 
+                 value={waBaseUrl}
+                 onChange={(e) => setWaBaseUrl(e.target.value)}
+                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all"
+               />
+            </div>
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">API Key</label>
+               <input 
+                 type="password" 
+                 value={waApiKey}
+                 onChange={(e) => setWaApiKey(e.target.value)}
+                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all"
+               />
+            </div>
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Pesan Template</label>
+               <textarea 
+                 rows={3}
+                 value={waMessage}
+                 onChange={(e) => setWaMessage(e.target.value)}
+                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all resize-none"
+               />
+            </div>
+         </div>
+      </div>
+
+      {/* Additional Controls */}
+      <div className="space-y-4">
+        {(user?.role === 'admin' || Number(user?.role_id) === 1) && (
+          <Link 
+            to="/users"
+            className="flex items-center justify-between p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
+                <User className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-bold text-slate-900 leading-tight">Manajemen User</p>
+                <p className="text-[10px] text-slate-500 font-medium">Kelola akun kasir & admin</p>
+              </div>
+            </div>
+            <Plus className="h-5 w-5 text-slate-300 group-hover:text-blue-400 transition-colors" />
+          </Link>
+        )}
+
+        <button 
+          onClick={saveConfiguration}
+          className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-200 active:scale-[0.98] transition-all"
+        >
+           Simpan Seluruh Perubahan
+        </button>
+
+        <button 
+          onClick={logout}
+          className="w-full flex items-center justify-center gap-3 py-5 rounded-[2rem] bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest hover:bg-red-100 active:scale-[0.98] transition-all"
+        >
+          <LogOut className="h-5 w-5" />
+          Logout / Keluar Akun
+        </button>
+      </div>
+
+      <div className="text-center px-10 py-4">
+         <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em]">Nganjuk POS Mobile v1.0</p>
+         <p className="text-[8px] font-medium text-slate-200 mt-1">Sistem Point of Sales Digital</p>
       </div>
     </div>
   );

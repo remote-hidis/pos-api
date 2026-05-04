@@ -68,16 +68,18 @@ async function startServer() {
 
           // Info Transaksi
           doc.fontSize(6);
-          const tinfo = data.transaction_info;
-          const dateStr = tinfo.created_at ? new Date(tinfo.created_at).toLocaleString('id-ID', {
+          const tinfo = data.transaction_info || data.sale || data;
+          const tid = tinfo.id || data.id || '-';
+          
+          const dateStr = (tinfo.created_at || tinfo.date) ? new Date(tinfo.created_at || tinfo.date).toLocaleString('id-ID', {
             dateStyle: 'short',
             timeStyle: 'short'
           }) : '-';
           
-          doc.font('Helvetica-Bold').text('NO TRX  : ', { continued: true }).font('Helvetica').text(`#TRX-${tinfo.id}`);
+          doc.font('Helvetica-Bold').text('NO TRX  : ', { continued: true }).font('Helvetica').text(`#TRX-${tid}`);
           doc.font('Helvetica-Bold').text('TANGGAL : ', { continued: true }).font('Helvetica').text(dateStr);
-          doc.font('Helvetica-Bold').text('KASIR   : ', { continued: true }).font('Helvetica').text(tinfo.cashier_name || 'Admin');
-          doc.font('Helvetica-Bold').text('METODE  : ', { continued: true }).font('Helvetica').text(tinfo.payment_method);
+          doc.font('Helvetica-Bold').text('KASIR   : ', { continued: true }).font('Helvetica').text(tinfo.cashier_name || data.cashier_name || 'Admin');
+          doc.font('Helvetica-Bold').text('METODE  : ', { continued: true }).font('Helvetica').text(tinfo.payment_method || data.payment_method || 'Cash');
           
           doc.moveDown(0.5);
           doc.fontSize(6).text('-'.repeat(45), { align: 'center' });
@@ -92,12 +94,13 @@ async function startServer() {
           doc.font('Helvetica');
 
           // Items Loop
-          (data.items || []).forEach((item: any) => {
+          const items = data.items || tinfo.items || [];
+          items.forEach((item: any) => {
              const startY = doc.y;
-             doc.fontSize(6).text(item.product_name, 10, startY, { width: 80 });
+             doc.fontSize(6).text(item.product_name || item.name || 'Produk', 10, startY, { width: 80 });
              const nextY = doc.y;
-             doc.text(item.quantity.toString(), 100, startY, { width: 20, align: 'center' });
-             doc.text(Number(item.subtotal).toLocaleString(), 120, startY, { width: 34, align: 'right' });
+             doc.text((item.quantity || item.qty || 0).toString(), 100, startY, { width: 20, align: 'center' });
+             doc.text(Number(item.subtotal || item.total || 0).toLocaleString(), 120, startY, { width: 34, align: 'right' });
              doc.y = Math.max(nextY, startY + 8);
              doc.moveDown(0.1);
           });
@@ -107,8 +110,9 @@ async function startServer() {
           doc.moveDown(0.5);
 
           // Total Section
+          const totalAmount = tinfo.total_amount || tinfo.total || data.total_amount || tinfo.grand_total || 0;
           doc.fontSize(8).font('Helvetica-Bold').text('TOTAL HARGA', 10, doc.y, { continued: true });
-          doc.text(`Rp ${Number(tinfo.total_amount).toLocaleString()}`, 10, doc.y, { align: 'right' });
+          doc.text(`Rp ${Number(totalAmount).toLocaleString()}`, 10, doc.y, { align: 'right' });
           
           doc.moveDown(1.5);
           doc.fontSize(6).font('Helvetica-Oblique').text(data.footer || 'Terima Kasih Atas Kunjungan Anda!', { align: 'center' });
