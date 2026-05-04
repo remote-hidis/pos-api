@@ -1,6 +1,6 @@
 {
-  "name": "Nganjuk POS Mobile",
-  "description": "A high-performance mobile POS system for modern retail and F&B businesses.",
+  "name": "Nganjuk POS PRO",
+  "description": "Enterprise-grade mobile Point of Sales (POS) system with dynamic API proxying, category management, and automated receipt printing.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

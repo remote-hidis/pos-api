@@ -681,31 +681,41 @@ function ProdukManajemen() {
 function BerandaKasir({ onAddToCart }: { onAddToCart: (p: any) => void }) {
   const { user, token, baseUrl } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/proxy/api/products', {
-          headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
-        });
-        const result = await response.json();
-        const items = Array.isArray(result) ? result : (result.data || result.products || []);
-        setProducts(items);
+        const [prodRes, catRes] = await Promise.all([
+          fetch('/api/proxy/api/products', {
+            headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
+          }),
+          fetch('/api/proxy/api/categories', {
+            headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
+          })
+        ]);
+        
+        const [prodResult, catResult] = await Promise.all([prodRes.json(), catRes.json()]);
+        
+        setProducts(Array.isArray(prodResult) ? prodResult : (prodResult.data || prodResult.products || []));
+        setCategories(Array.isArray(catResult) ? catResult : (catResult.data || catResult.categories || []));
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
       }
     };
-    fetchProducts();
+    fetchData();
   }, [token, baseUrl]);
 
-  const filtered = products.filter(p => 
-    (p.product_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (p.category_name || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products.filter(p => {
+    const nameMatch = (p.product_name || "").toLowerCase().includes(search.toLowerCase());
+    const categoryMatch = selectedCategory ? String(p.category_id) === String(selectedCategory) : true;
+    return nameMatch && categoryMatch;
+  });
 
   return (
     <div className="space-y-6">
@@ -713,69 +723,125 @@ function BerandaKasir({ onAddToCart }: { onAddToCart: (p: any) => void }) {
         <div>
           <h1 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-1">Selamat Datang</h1>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">{user?.full_name?.split(' ')[0] || 'Kasir'}</h2>
+          <div className="flex items-center gap-1.5 mt-1">
+             <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+             <p className="text-[10px] font-bold text-slate-400 uppercase">Sistem Online</p>
+          </div>
         </div>
-        <div className="h-14 w-14 rounded-2xl bg-white shadow-xl shadow-slate-200/50 flex items-center justify-center text-slate-400 border border-slate-100">
-           <User className="h-6 w-6" />
+        <div className="h-14 w-14 rounded-3xl bg-white shadow-xl shadow-slate-200/50 flex items-center justify-center text-slate-400 border border-slate-100 ring-4 ring-slate-50">
+           <User className="h-7 w-7" />
         </div>
       </header>
 
-      <div className="relative group">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300 group-focus-within:text-blue-500 transition-colors" />
-        <input 
-          type="text" 
-          placeholder="Cari menu favorit atau scan..." 
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-white rounded-[1.5rem] py-4 pl-12 pr-4 text-sm ring-1 ring-slate-100 shadow-sm focus:ring-2 focus:ring-blue-600 outline-none transition-all placeholder:text-slate-300 font-medium"
-        />
+      <div className="space-y-4">
+        <div className="relative group">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300 group-focus-within:text-blue-500 transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Cari menu favorit..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white rounded-3xl py-5 pl-14 pr-5 text-sm ring-1 ring-slate-100 shadow-sm focus:ring-2 focus:ring-blue-600 outline-none transition-all placeholder:text-slate-300 font-medium"
+          />
+        </div>
+
+        {/* Category Filter Chips */}
+        {!loading && categories.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={cn(
+                "px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all",
+                selectedCategory === null 
+                  ? "bg-slate-900 text-white shadow-lg shadow-slate-200" 
+                  : "bg-white text-slate-400 border border-slate-100 hover:border-slate-200"
+              )}
+            >
+              Semua
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={cn(
+                  "px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all",
+                  String(selectedCategory) === String(cat.id)
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100" 
+                    : "bg-white text-slate-400 border border-slate-100 hover:border-slate-200"
+                )}
+              >
+                {cat.category_name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="py-20 flex flex-col items-center gap-4">
-          <div className="h-12 w-12 border-4 border-blue-50 border-t-blue-600 rounded-full animate-spin" />
-          <p className="text-xs font-bold text-slate-300 uppercase tracking-[0.2em]">Menyiapkan Menu...</p>
+          <div className="h-12 w-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Menyiapkan Menu...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-20 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-100">
-          <Package className="h-12 w-12 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-sm tracking-tight text-balance px-10">
-            {search ? 'Menu tidak ditemukan' : 'Belum ada produk terdaftar. Cabang ini masih kosong.'}
+        <div className="py-20 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+          <Package className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+          <p className="text-slate-400 font-bold text-sm tracking-tight px-10">
+            {search || selectedCategory ? 'Oops! Menu tidak ditemukan dalam pencarian ini.' : 'Belum ada produk terdaftar.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-5 pb-24">
-          {filtered.map((item) => (
-            <motion.div 
-              key={item.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-50 flex flex-col justify-between group active:scale-95 transition-transform"
-            >
-              <div>
-                 <div className="flex items-center justify-between">
-                   <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-2 py-1 rounded-lg">
-                    {item.category_name}
-                   </span>
-                   {item.stock !== undefined && (
-                     <span className={cn("text-[8px] font-bold", item.stock > 0 ? "text-green-500" : "text-red-500")}>
-                        {item.stock > 0 ? `Sedia ${item.stock}` : 'Habis'}
+          {filtered.map((item) => {
+            const isOutOfStock = item.stock !== undefined && item.stock <= 0;
+            return (
+              <motion.div 
+                key={item.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileTap={!isOutOfStock ? { scale: 0.96 } : undefined}
+                className={cn(
+                  "bg-white p-5 rounded-[2.5rem] shadow-sm border border-slate-50 flex flex-col justify-between group transition-all h-full",
+                  isOutOfStock ? "opacity-60 saturate-50" : "hover:border-blue-100 hover:shadow-xl hover:shadow-blue-900/5"
+                )}
+              >
+                <div className="space-y-4">
+                   <div className="flex items-center justify-between">
+                     <span className="text-[8px] font-black uppercase tracking-[0.15em] text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-xl">
+                      {item.category_name}
                      </span>
-                   )}
-                 </div>
-                 <h3 className="mt-4 font-bold text-slate-800 leading-snug line-clamp-2">{item.product_name}</h3>
-              </div>
-              <div className="mt-5 flex items-center justify-between">
-                <span className="text-sm font-black text-slate-900 tracking-tight">Rp{(item.price || 0).toLocaleString()}</span>
-                <button 
-                  disabled={item.stock <= 0}
-                  onClick={() => onAddToCart(item)}
-                  className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg hover:bg-blue-600 disabled:bg-slate-100 disabled:text-slate-300 transition-colors shadow-lg shadow-slate-200"
-                >
-                  +
-                </button>
-              </div>
-            </motion.div>
-          ))}
+                     <div className={cn(
+                       "h-2 w-2 rounded-full",
+                       isOutOfStock ? "bg-red-400" : (item.stock < 10 ? "bg-amber-400" : "bg-green-400")
+                     )} />
+                   </div>
+                   <div>
+                     <h3 className="font-bold text-slate-800 leading-tight line-clamp-2 min-h-[2.5rem]">{item.product_name}</h3>
+                     <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                       Stok: {item.stock || 0}
+                     </p>
+                   </div>
+                </div>
+                <div className="mt-6 flex flex-col gap-3">
+                  <span className="text-base font-black text-slate-900 font-mono">
+                    Rp{(item.price || 0).toLocaleString()}
+                  </span>
+                  <button 
+                    disabled={isOutOfStock}
+                    onClick={() => onAddToCart(item)}
+                    className={cn(
+                      "w-full py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.1em] transition-all flex items-center justify-center gap-2",
+                      isOutOfStock 
+                        ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
+                        : "bg-blue-600 text-white shadow-lg shadow-blue-100 active:scale-95 group-hover:bg-blue-700"
+                    )}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    TAMBAH
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -920,46 +986,81 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
             />
           </div>
 
-          <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white">
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-slate-400 mb-6">
-              <div className="flex flex-col gap-1">
-                <span>Metode Pembayaran</span>
+          <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl shadow-blue-900/40 border border-white/5 relative overflow-hidden">
+            {/* Background design element */}
+            <div className="absolute -top-24 -right-24 h-64 w-64 bg-blue-600 rounded-full blur-[100px] opacity-20 pointer-events-none" />
+            
+            <div className="relative space-y-10">
+              <div className="flex items-start justify-between">
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Metode Pembayaran</p>
+                  <div className="flex gap-2.5">
+                    {['Cash', 'QRIS', 'Transfer'].map(m => (
+                      <button 
+                        key={m}
+                        onClick={() => setMethod(m)}
+                        className={cn(
+                          "px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] transition-all", 
+                          method === m 
+                            ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" 
+                            : "bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <button 
                   onClick={() => setShouldPrint(!shouldPrint)}
-                  className="flex items-center gap-2 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+                  className="flex flex-col items-end gap-3"
                 >
-                  <div className={cn("h-3 w-3 rounded-full border border-blue-400 flex items-center justify-center", shouldPrint && "bg-blue-400")}>
-                    {shouldPrint && <div className="h-1.5 w-1.5 bg-slate-900 rounded-full" />}
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Struk</p>
+                  <div className={cn(
+                    "h-6 w-11 rounded-full p-1 transition-all duration-300",
+                    shouldPrint ? "bg-blue-600" : "bg-slate-800 ring-1 ring-white/10"
+                  )}>
+                    <div className={cn(
+                      "h-4 w-4 bg-white rounded-full shadow-lg transition-all duration-300",
+                      shouldPrint ? "translate-x-5" : "translate-x-0"
+                    )} />
                   </div>
-                  Print Struk Otomatis
                 </button>
               </div>
-              <div className="flex gap-2">
-                {['Cash', 'QRIS', 'Transfer'].map(m => (
-                  <button 
-                    key={m}
-                    onClick={() => setMethod(m)}
-                    className={cn("px-3 py-1 rounded-lg", method === m ? "bg-blue-600 text-white" : "bg-slate-800")}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            <div className="flex justify-between items-end border-t border-slate-800 pt-6">
-               <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase mb-1">Total Tagihan</p>
-                  <p className="text-3xl font-black tracking-tight font-mono">Rp{total.toLocaleString()}</p>
-               </div>
-               <button 
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Total Tagihan</p>
+                <h3 className="text-5xl font-black tracking-tighter font-mono">
+                   Rp{total.toLocaleString()}
+                </h3>
+              </div>
+
+              <button 
                 onClick={handleCheckout}
                 disabled={isProcessing}
-                className="px-8 py-4 bg-blue-600 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50"
-               >
-                 {isProcessing ? 'Proses...' : 'Bayar'}
-               </button>
+                className={cn(
+                  "w-full py-6 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl transition-all flex items-center justify-center gap-3 relative overflow-hidden",
+                  isProcessing 
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed" 
+                    : "bg-blue-600 text-white hover:bg-blue-500 active:scale-[0.98] shadow-blue-900/40"
+                )}
+              >
+                {isProcessing ? (
+                  <>
+                    <RefreshCcw className="h-5 w-5 animate-spin" />
+                    MEMPROSES...
+                  </>
+                ) : (
+                  <>
+                    SELESAIKAN ORDER
+                  </>
+                )}
+              </button>
             </div>
+            
+            <p className="text-center text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 mt-8 opacity-40">
+               Nganjuk POS Secure Checkout v1.0
+            </p>
           </div>
         </div>
       )}
