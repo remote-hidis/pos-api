@@ -5,9 +5,15 @@ interface AuthContextType {
   user: any | null;
   token: string | null;
   baseUrl: string;
+  whatsappUrl: string;
+  whatsappApiKey: string;
+  whatsappGreeting: string;
   login: (userData: any, token: string) => void;
   logout: () => void;
   updateBaseUrl: (url: string) => void;
+  updateWhatsappUrl: (url: string) => void;
+  updateWhatsappApiKey: (key: string) => void;
+  updateWhatsappGreeting: (text: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return newUrl;
     }
     return saved || DEFAULT_API_BASE_URL;
+  });
+  const [whatsappUrl, setWhatsappUrl] = useState<string>(() => {
+    return localStorage.getItem('pos_wa_url') || 'https://wa.nganjuk.net';
+  });
+  const [whatsappApiKey, setWhatsappApiKey] = useState<string>(() => {
+    return localStorage.getItem('pos_wa_key') || '';
+  });
+  const [whatsappGreeting, setWhatsappGreeting] = useState<string>(() => {
+    return localStorage.getItem('pos_wa_greeting') || 'Terima kasih telah berbelanja di toko kami!';
   });
 
   useEffect(() => {
@@ -52,8 +67,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('pos_base_url', url);
   };
 
+  const updateWhatsappUrl = (url: string) => {
+    setWhatsappUrl(url);
+    localStorage.setItem('pos_wa_url', url);
+  };
+
+  const updateWhatsappApiKey = (key: string) => {
+    setWhatsappApiKey(key);
+    localStorage.setItem('pos_wa_key', key);
+  };
+
+  const updateWhatsappGreeting = (text: string) => {
+    setWhatsappGreeting(text);
+    localStorage.setItem('pos_wa_greeting', text);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, baseUrl, login, logout, updateBaseUrl }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      token, 
+      baseUrl, 
+      whatsappUrl, 
+      whatsappApiKey, 
+      whatsappGreeting, 
+      login, 
+      logout, 
+      updateBaseUrl, 
+      updateWhatsappUrl,
+      updateWhatsappApiKey,
+      updateWhatsappGreeting
+    }}>
       {children}
     </AuthContext.Provider>
   );

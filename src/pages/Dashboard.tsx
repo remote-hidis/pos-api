@@ -1,11 +1,276 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, ClipboardList, History, Settings, LogOut, Search, User, Package, Plus, Edit2, Trash2, RefreshCcw, MessageSquare } from 'lucide-react';
+import { Home, ClipboardList, History, Settings, LogOut, Search, User, Package, Plus, Edit2, Trash2, RefreshCcw, MessageSquare, TrendingUp, ArrowDownCircle, ArrowUpCircle, Wallet, Calendar, Lock } from 'lucide-react';
 import { useAuth } from '../services/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 // --- Sub-Pages Components ---
+
+// --- Sub-Pages Components ---
+
+function FinanceManajemen() {
+  const { token, baseUrl } = useAuth();
+  const [journal, setJournal] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>({ total_income: 0, total_expense: 0, current_balance: 0 });
+  const [loading, setLoading] = useState(true);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [expenseData, setExpenseData] = useState({
+    description: '',
+    amount: '',
+    category: 'EXPENSE'
+  });
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [sumRes, jRes] = await Promise.all([
+        fetch('/api/proxy/api/finance/summary', {
+          headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
+        }),
+        fetch(`/api/proxy/api/finance/journal?startDate=${startDate}&endDate=${endDate}`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
+        })
+      ]);
+      
+      const sumResult = await sumRes.json();
+      const jResult = await jRes.json();
+      
+      if (sumResult.success) setSummary(sumResult.data || sumResult);
+      if (jResult.success) setJournal(jResult.data || jResult);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [token, baseUrl, startDate, endDate]);
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expenseData.description || !expenseData.amount) return;
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/proxy/api/finance/expense', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'x-target-base-url': baseUrl,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          description: expenseData.description,
+          amount: Number(expenseData.amount),
+          category: expenseData.category
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Gagal mencatat pengeluaran');
+      
+      setExpenseData({ description: '', amount: '', category: 'EXPENSE' });
+      setShowAddExpense(false);
+      fetchData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <header className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">Finance <span className="text-blue-600">Pro</span></h2>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Manajemen Arus Kas</p>
+        </div>
+        <button 
+          onClick={() => setShowAddExpense(!showAddExpense)}
+          className={cn(
+            "h-12 px-6 rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all",
+            showAddExpense ? "bg-red-50 text-red-600" : "bg-slate-900 text-white shadow-xl shadow-slate-200"
+          )}
+        >
+          {showAddExpense ? <Plus className="h-4 w-4 rotate-45" /> : <TrendingUp className="h-4 w-4" />}
+          {showAddExpense ? 'Batal' : 'Catat Biaya'}
+        </button>
+      </header>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
+           <div className="absolute -right-4 -top-4 text-green-500/5">
+              <TrendingUp className="h-24 w-24" />
+           </div>
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Pendapatan</p>
+           <h3 className="text-2xl font-black text-slate-900 font-mono">Rp{Number(summary.total_income || 0).toLocaleString()}</h3>
+           <div className="mt-4 flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Input Otomatis</p>
+           </div>
+        </div>
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
+           <div className="absolute -right-4 -top-4 text-red-500/5">
+              <ArrowDownCircle className="h-24 w-24" />
+           </div>
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Pengeluaran</p>
+           <h3 className="text-2xl font-black text-slate-900 font-mono text-red-600">Rp{Number(summary.total_expense || 0).toLocaleString()}</h3>
+           <div className="mt-4 flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-red-400" />
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Operational Cost</p>
+           </div>
+        </div>
+        <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white shadow-2xl shadow-blue-900/10 relative overflow-hidden">
+           <div className="absolute -right-6 -bottom-6 text-blue-500/10">
+              <Wallet className="h-32 w-32" />
+           </div>
+           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Saldo Saat Ini</p>
+           <h3 className="text-2xl font-black font-mono">Rp{Number(summary.current_balance || 0).toLocaleString()}</h3>
+           <div className="mt-4 flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <p className="text-[9px] font-bold text-slate-500 uppercase">Saldo Kasir</p>
+           </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showAddExpense && (
+          <motion.form 
+            initial={{ opacity: 0, y: -20, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -20, height: 0 }}
+            onSubmit={handleAddExpense}
+            className="bg-white p-8 rounded-[3rem] border-2 border-slate-900 shadow-2xl space-y-6 overflow-hidden"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-red-50 rounded-2xl flex items-center justify-center">
+                 <ArrowDownCircle className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest italic">Input Biaya Operasional</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Keterangan Biaya</label>
+                <input 
+                  type="text" 
+                  placeholder="Contoh: Bayar Listrik Bulanan"
+                  value={expenseData.description}
+                  onChange={e => setExpenseData({...expenseData, description: e.target.value})}
+                  className="w-full bg-slate-50 rounded-2xl p-4 text-sm ring-1 ring-slate-100 focus:ring-2 focus:ring-slate-900 outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Jumlah Nominal (Rp)</label>
+                <input 
+                  type="number" 
+                  placeholder="50000"
+                  value={expenseData.amount}
+                  onChange={e => setExpenseData({...expenseData, amount: e.target.value})}
+                  className="w-full bg-slate-50 rounded-2xl p-4 text-sm ring-1 ring-slate-100 focus:ring-2 focus:ring-slate-900 outline-none"
+                />
+              </div>
+            </div>
+
+            <button 
+              type="submit"
+              disabled={isSubmitting || !expenseData.description || !expenseData.amount}
+              className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-200 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {isSubmitting ? 'Mencatat...' : 'Simpan Transaksi'}
+            </button>
+          </motion.form>
+        )}
+      </AnimatePresence>
+
+      {/* Date Filter */}
+      <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-4">
+        <div className="flex items-center gap-3 w-full">
+           <Calendar className="h-5 w-5 text-slate-300" />
+           <div className="flex items-center gap-2 w-full">
+             <input 
+               type="date" 
+               value={startDate}
+               onChange={e => setStartDate(e.target.value)}
+               className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 outline-none focus:ring-2 focus:ring-blue-600 w-full"
+             />
+             <span className="text-slate-300 font-bold">sampai</span>
+             <input 
+               type="date" 
+               value={endDate}
+               onChange={e => setEndDate(e.target.value)}
+               className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 outline-none focus:ring-2 focus:ring-blue-600 w-full"
+             />
+           </div>
+        </div>
+        <button 
+          onClick={fetchData} 
+          className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-blue-100"
+        >
+          <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
+        </button>
+      </div>
+
+      {/* Journal Table/List */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Jurnal Transaksi</h3>
+           <p className="text-[8px] font-black text-slate-300 uppercase italic">Real-time Ledger</p>
+        </div>
+        
+        {loading && journal.length === 0 ? (
+          <div className="py-20 flex flex-col items-center gap-3">
+             <div className="h-8 w-8 border-4 border-slate-100 border-t-slate-900 rounded-full animate-spin" />
+          </div>
+        ) : journal.length === 0 ? (
+          <div className="bg-white p-12 rounded-[2.5rem] border-2 border-dashed border-slate-100 text-center">
+             <p className="text-slate-300 font-bold text-sm">Tidak ada transaksi pada periode ini</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {journal.map((j: any) => (
+              <div key={j.id} className="bg-white p-5 rounded-3xl border border-slate-50 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "h-12 w-12 rounded-2xl flex items-center justify-center",
+                    Number(j.debit) > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                  )}>
+                    {Number(j.debit) > 0 ? <TrendingUp className="h-6 w-6" /> : <ArrowDownCircle className="h-6 w-6" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors uppercase italic">{j.description}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(j.transaction_date || j.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</p>
+                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-[0.1em] bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-50">{j.category}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={cn(
+                    "font-black text-sm font-mono tracking-tight",
+                    Number(j.debit) > 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {Number(j.debit) > 0 ? '+' : '-'}Rp{Number(j.debit > 0 ? j.debit : j.credit).toLocaleString()}
+                  </p>
+                  <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter mt-1">
+                    Balance: Rp{Number(j.balance_after).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function UserManajemen() {
   const { token, baseUrl } = useAuth();
@@ -849,7 +1114,7 @@ function BerandaKasir({ onAddToCart }: { onAddToCart: (p: any) => void }) {
 }
 
 function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUpdateQty: any, onRemove: any, onClear: any }) {
-  const { token, baseUrl } = useAuth();
+  const { token, baseUrl, whatsappUrl, whatsappApiKey, whatsappGreeting } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [method, setMethod] = useState('Cash');
   const [shouldPrint, setShouldPrint] = useState(true);
@@ -881,35 +1146,88 @@ function Transaksi({ cart, onUpdateQty, onRemove, onClear }: { cart: any[], onUp
       if (!response.ok) throw new Error(result.message || 'Transaksi gagal');
       
       // Robust extraction of ID
-      const saleId = result.data?.id || 
+      const saleId = result.data?.transaction_id ||
+                    result.data?.id || 
                     result.sale?.id || 
                     result.data?.sale?.id || 
                     result.id || 
-                    (typeof result.data === 'number' || typeof result.data === 'string' ? result.data : undefined);
+                    result.data?.sale_id ||
+                    result.sale_id ||
+                    result.data?.insertId ||
+                    result.insertId ||
+                    (typeof result.data === 'number' || typeof result.data === 'string' ? result.data : null);
+
+      console.log("Checkout Result:", result, "Extracted SaleID:", saleId);
+
+      if (!saleId || String(saleId) === 'undefined' || String(saleId) === 'null') {
+        console.warn("Sale ID not found in response:", result);
+      }
       
       // Kirim WhatsApp jika nomor diisi dan konfigurasi ada
-      const waBaseUrl = localStorage.getItem('wa_base_url');
-      const waApiKey = localStorage.getItem('wa_api_key');
-      const waMessageTemplate = localStorage.getItem('wa_message') || 'Halo, ini struk belanja Anda.';
-
-      if (waNumber && waApiKey && waBaseUrl) {
+      if (waNumber && whatsappApiKey && whatsappUrl) {
         try {
-          const msg = `${waMessageTemplate}\n\nTotal: Rp${total.toLocaleString()}\nNo TRX: #TRX-${saleId}\nSilakan cek struk digital ini.`;
-          fetch(waBaseUrl, {
+          // Fetch detail data untuk pesan yang lebih lengkap
+          let receiptBody = "";
+          
+          if (saleId && String(saleId) !== 'undefined' && String(saleId) !== 'null') {
+            try {
+              const historyRes = await fetch(`/api/proxy/api/sales/history/${saleId}`, {
+                headers: { 'Authorization': `Bearer ${token}`, 'x-target-base-url': baseUrl }
+              });
+              const historyResult = await historyRes.json();
+              
+              if (historyResult.success && historyResult.data) {
+                const d = historyResult.data;
+                const dateStr = new Date(d.sale_date).toLocaleString('id-ID');
+                
+                receiptBody = `
+============================
+NO TRX: #TRX-${d.id}
+TANGGAL: ${dateStr}
+KASIR: ${d.cashier_name || 'Staff'}
+============================
+${d.items.map((i: any) => `${i.product_name}\n${i.quantity} x Rp${(Number(i.subtotal)/i.quantity).toLocaleString()} = Rp${Number(i.subtotal).toLocaleString()}`).join("\n")}
+============================
+TOTAL  : Rp${Number(d.total_amount).toLocaleString()}
+METODE : ${d.payment_method}
+============================`;
+              }
+            } catch (fetchErr) {
+              console.error("Gagal ambil detail history:", fetchErr);
+            }
+          }
+
+          // Fallback if detail fetch failed or no saleId
+          if (!receiptBody) {
+             receiptBody = `
+============================
+NO TRX: #TRX-${saleId || 'N/A'}
+TOTAL  : Rp${total.toLocaleString()}
+METODE : ${method}
+============================`;
+          }
+
+          const msg = `${whatsappGreeting}\n${receiptBody}\n\nSilakan simpan struk digital ini.`;
+          const waTargetUrl = whatsappUrl.includes('/send-message') ? whatsappUrl : (whatsappUrl.endsWith('/') ? whatsappUrl + 'send-message' : whatsappUrl + '/send-message');
+          
+          fetch(`/api/proxy?target=${encodeURIComponent(waTargetUrl)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              api_key: waApiKey,
+              api_key: whatsappApiKey,
               numbers: waNumber,
               message: msg
             })
-          }).catch(e => console.error("WA error:", e));
+          })
+          .then(r => r.json())
+          .then(d => console.log("WA Gateway Response:", d))
+          .catch(e => console.error("WA error:", e));
         } catch (e) {
           console.error("Gagal kirim WA:", e);
         }
       }
 
-      alert('Berhasil! ' + result.message);
+      alert("Berhasil! Transaksi berhasil disimpan");
 
       // Arahkan ke print jika diinginkan
       if (shouldPrint && saleId) {
@@ -1289,30 +1607,22 @@ function Riwayat() {
 }
 
 function Pengaturan() {
-  const { logout, baseUrl, updateBaseUrl, user } = useAuth();
+  const { logout, baseUrl, updateBaseUrl, whatsappUrl, updateWhatsappUrl, whatsappApiKey, updateWhatsappApiKey, whatsappGreeting, updateWhatsappGreeting, user, token } = useAuth();
   const isAdmin = user?.role === 'admin' || Number(user?.role_id) === 1;
   const roleLabel = isAdmin ? 'Owner / Admin' : 'Staff Kasir';
 
-  // API Base URL State
+  const [activeTab, setActiveTab] = useState<'api' | 'user'>('api');
   const [tempBaseUrl, setTempBaseUrl] = useState(baseUrl);
-
-  // Notification State
+  const [tempWaUrl, setTempWaUrl] = useState(whatsappUrl);
+  const [tempWaKey, setTempWaKey] = useState(whatsappApiKey);
+  const [tempWaGreeting, setTempWaGreeting] = useState(whatsappGreeting);
   const [showNotification, setShowNotification] = useState(false);
 
-  // WhatsApp Settings State
-  const [waBaseUrl, setWaBaseUrl] = useState(localStorage.getItem('wa_base_url') || 'https://nganjuk.net/send-message');
-  const [waApiKey, setWaApiKey] = useState(localStorage.getItem('wa_api_key') || '');
-  const [waMessage, setWaMessage] = useState(localStorage.getItem('wa_message') || '');
-
   const saveConfiguration = () => {
-    // Save API Base URL
     updateBaseUrl(tempBaseUrl);
-    
-    // Save WA Settings
-    localStorage.setItem('wa_base_url', waBaseUrl);
-    localStorage.setItem('wa_api_key', waApiKey);
-    localStorage.setItem('wa_message', waMessage);
-    
+    updateWhatsappUrl(tempWaUrl);
+    updateWhatsappApiKey(tempWaKey);
+    updateWhatsappGreeting(tempWaGreeting);
     setShowNotification(true);
     setTimeout(() => setShowNotification(false), 3000);
   };
@@ -1340,133 +1650,211 @@ function Pengaturan() {
         )}
       </AnimatePresence>
 
-      <header>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Pengaturan</h2>
-        <p className="text-slate-500 text-sm">Kelola akun dan integrasi sistem</p>
+      <header className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic">Settings <span className="text-blue-600">Dock</span></h2>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Manajemen Sistem POS</p>
+        </div>
+        <div className="h-12 w-12 rounded-2xl bg-white shadow-xl shadow-slate-200 flex items-center justify-center text-slate-400 border border-slate-50">
+           <Settings className="h-6 w-6" />
+        </div>
       </header>
 
-      {/* Profil User */}
-      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
-        <div className="flex items-center gap-5">
-           <div className="h-20 w-20 rounded-3xl bg-blue-50 flex items-center justify-center text-blue-600 ring-4 ring-blue-50/50">
-              <User className="h-10 w-10" />
-           </div>
-           <div>
-              <span className="inline-block px-2 py-1 rounded-lg bg-blue-100 text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">
-                {user?.role || (Number(user?.role_id) === 1 ? 'Admin' : 'Cashier')}
-              </span>
-              <h3 className="font-bold text-xl text-slate-900 leading-tight">{user?.full_name || user?.username}</h3>
-              <p className="text-sm text-slate-500 font-medium">{roleLabel}</p>
-           </div>
-        </div>
-      </div>
-
-      {/* API Configuration */}
-      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-6">
-         <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-               <Package className="h-6 w-6" />
-            </div>
-            <div>
-               <h3 className="font-bold text-lg text-slate-900 leading-tight">API Backend</h3>
-               <p className="text-xs text-slate-500 font-medium tracking-tight">Koneksi ke POS Server Aktif</p>
-            </div>
+      {/* Profile Card Mini */}
+      <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-50 flex items-center gap-4">
+         <div className="h-14 w-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 ring-4 ring-slate-50">
+            <User className="h-7 w-7" />
          </div>
-         <div className="space-y-4 pt-4 border-t border-slate-50">
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Target Base URL</label>
-               <input 
-                 type="text" 
-                 value={tempBaseUrl}
-                 onChange={(e) => setTempBaseUrl(e.target.value)}
-                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
-               />
+         <div>
+            <h3 className="font-bold text-slate-900 leading-tight">{user?.full_name || user?.username}</h3>
+            <div className="flex items-center gap-2 mt-1">
+               <span className="text-[8px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100/50">
+                 {roleLabel}
+               </span>
+               <div className="h-1 w-1 rounded-full bg-slate-300" />
+               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Pos System Online</p>
             </div>
          </div>
       </div>
 
-      {/* WhatsApp Gateway */}
-      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-6">
-         <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600">
-               <MessageSquare className="h-6 w-6" />
-            </div>
-            <div>
-               <h3 className="font-bold text-lg text-slate-900 leading-tight">WA Gateway</h3>
-               <p className="text-xs text-slate-500 font-medium tracking-tight">Koneksi pengiriman struk otomatis</p>
-            </div>
-         </div>
-
-         <div className="space-y-4 pt-4 border-t border-slate-50">
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Gateway URL</label>
-               <input 
-                 type="text" 
-                 value={waBaseUrl}
-                 onChange={(e) => setWaBaseUrl(e.target.value)}
-                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all"
-               />
-            </div>
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">API Key</label>
-               <input 
-                 type="password" 
-                 value={waApiKey}
-                 onChange={(e) => setWaApiKey(e.target.value)}
-                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all"
-               />
-            </div>
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Pesan Template</label>
-               <textarea 
-                 rows={3}
-                 value={waMessage}
-                 onChange={(e) => setWaMessage(e.target.value)}
-                 className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all resize-none"
-               />
-            </div>
-         </div>
-      </div>
-
-      {/* Additional Controls */}
-      <div className="space-y-4">
-        {(user?.role === 'admin' || Number(user?.role_id) === 1) && (
-          <Link 
-            to="/users"
-            className="flex items-center justify-between p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
-                <User className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="font-bold text-slate-900 leading-tight">Manajemen User</p>
-                <p className="text-[10px] text-slate-500 font-medium">Kelola akun kasir & admin</p>
-              </div>
-            </div>
-            <Plus className="h-5 w-5 text-slate-300 group-hover:text-blue-400 transition-colors" />
-          </Link>
-        )}
-
+      {/* Navigation Tabs */}
+      <div className="bg-slate-100/50 p-1.5 rounded-[2rem] flex gap-1.5 ring-1 ring-slate-100 shadow-inner">
         <button 
-          onClick={saveConfiguration}
-          className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-200 active:scale-[0.98] transition-all"
+          onClick={() => setActiveTab('api')}
+          className={cn(
+            "flex-1 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.15em] transition-all",
+            activeTab === 'api' ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-100" : "text-slate-400 hover:text-slate-600"
+          )}
         >
-           Simpan Seluruh Perubahan
+          API Server
         </button>
+        <button 
+          onClick={() => setActiveTab('user')}
+          className={cn(
+            "flex-1 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.15em] transition-all",
+            activeTab === 'user' ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-100" : "text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Manajemen User
+        </button>
+      </div>
 
+      <AnimatePresence mode="wait">
+        {activeTab === 'api' ? (
+          <motion.div 
+            key="api-tab"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
+            className="space-y-6"
+          >
+            {/* API Configuration */}
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-50 space-y-8 relative overflow-hidden">
+               <div className="absolute -right-6 -top-6 text-indigo-500/5">
+                  <RefreshCcw className="h-32 w-32" />
+               </div>
+
+               <div className="space-y-6">
+                 <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                       <Package className="h-6 w-6" />
+                    </div>
+                    <div>
+                       <h3 className="font-bold text-lg text-slate-800 leading-tight italic uppercase italic">API Backend</h3>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Koneksi POS Server</p>
+                    </div>
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Endpoint Utama</label>
+                    <input 
+                      type="text" 
+                      value={tempBaseUrl}
+                      onChange={(e) => setTempBaseUrl(e.target.value)}
+                      className="w-full bg-slate-50/50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-mono focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600 outline-none transition-all shadow-inner"
+                      placeholder="https://api.yourdomain.com"
+                    />
+                 </div>
+               </div>
+
+               <div className="space-y-6 pt-8 border-t border-slate-100 border-dashed">
+                 <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600">
+                       <MessageSquare className="h-6 w-6" />
+                    </div>
+                    <div>
+                       <h3 className="font-bold text-lg text-slate-800 leading-tight italic uppercase">API WhatsApp</h3>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Kirim Struk Otomatis</p>
+                    </div>
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">WhatsApp Gateway URL</label>
+                    <input 
+                      type="text" 
+                      value={tempWaUrl}
+                      onChange={(e) => setTempWaUrl(e.target.value)}
+                      className="w-full bg-slate-50/50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-mono focus:ring-2 focus:ring-green-600/10 focus:border-green-600 outline-none transition-all shadow-inner"
+                      placeholder="https://wa.yourdomain.com"
+                    />
+                 </div>
+                 <div className="space-y-4 pt-4">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">API Key WhatsApp</label>
+                      <input 
+                        type="password" 
+                        value={tempWaKey}
+                        onChange={(e) => setTempWaKey(e.target.value)}
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-mono focus:ring-2 focus:ring-green-600/10 focus:border-green-600 outline-none transition-all shadow-inner"
+                        placeholder="Masukkan API Key"
+                      />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Template Greeting</label>
+                      <textarea 
+                        rows={3}
+                        value={tempWaGreeting}
+                        onChange={(e) => setTempWaGreeting(e.target.value)}
+                        className="w-full bg-slate-50/50 border border-slate-100 rounded-2xl px-5 py-4 text-xs focus:ring-2 focus:ring-green-600/10 focus:border-green-600 outline-none transition-all shadow-inner resize-none"
+                        placeholder="Contoh: Terima kasih telah berbelanja..."
+                      />
+                   </div>
+                 </div>
+               </div>
+
+               <button 
+                 onClick={saveConfiguration}
+                 className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-slate-200 active:scale-[0.98] transition-all flex items-center justify-center gap-3 relative overflow-hidden group"
+               >
+                  <RefreshCcw className="h-4 w-4 group-hover:rotate-180 transition-transform duration-700" />
+                  SIMPAN KONFIGURASI
+               </button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="user-tab"
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            className="space-y-4"
+          >
+            {isAdmin ? (
+              <>
+                <Link 
+                  to="/users"
+                  className="flex items-center justify-between p-8 bg-white rounded-[2.5rem] border border-slate-50 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all group"
+                >
+                  <div className="flex items-center gap-5">
+                    <div className="h-14 w-14 bg-blue-50 rounded-[1.25rem] flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:rotate-6">
+                      <User className="h-7 w-7" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-lg leading-tight uppercase italic">Akses Akun</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Kelola Kasir & Admin</p>
+                    </div>
+                  </div>
+                  <Plus className="h-6 w-6 text-slate-200 group-hover:text-blue-500 transition-colors" />
+                </Link>
+
+                <Link 
+                  to="/finance"
+                  className="flex items-center justify-between p-8 bg-white rounded-[2.5rem] border border-slate-50 shadow-sm hover:shadow-xl hover:shadow-green-900/5 transition-all group mt-2"
+                >
+                  <div className="flex items-center gap-5">
+                    <div className="h-14 w-14 bg-green-50 rounded-[1.25rem] flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all transform group-hover:-rotate-6">
+                      <Wallet className="h-7 w-7" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-lg leading-tight uppercase italic">Laporan Finance</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Audit Arus Kas Bisnis</p>
+                    </div>
+                  </div>
+                  <TrendingUp className="h-6 w-6 text-slate-200 group-hover:text-green-500 transition-colors" />
+                </Link>
+              </>
+            ) : (
+              <div className="bg-white p-12 rounded-[3rem] border border-slate-50 text-center">
+                 <Lock className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+                 <p className="text-slate-400 font-bold text-sm tracking-tight px-10">Maaf, akses manajemen hanya tersedia untuk akun Owner/Admin.</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Logout Action */}
+      <div className="pt-4">
         <button 
           onClick={logout}
-          className="w-full flex items-center justify-center gap-3 py-5 rounded-[2rem] bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest hover:bg-red-100 active:scale-[0.98] transition-all"
+          className="w-full flex items-center justify-center gap-4 py-5 rounded-[2rem] bg-red-50 text-red-600 font-black text-xs uppercase tracking-[0.2em] hover:bg-red-100 hover:text-red-700 active:scale-[0.98] transition-all border border-red-100/50 border-dashed"
         >
           <LogOut className="h-5 w-5" />
-          Logout / Keluar Akun
+          LOGOUT SYSTEM
         </button>
       </div>
 
-      <div className="text-center px-10 py-4">
-         <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em]">Nganjuk POS Mobile v1.0</p>
-         <p className="text-[8px] font-medium text-slate-200 mt-1">Sistem Point of Sales Digital</p>
+      <div className="text-center px-10 py-6">
+         <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">Nganjuk POS PRO Enterprise</p>
+         <div className="h-px w-8 bg-slate-100 mx-auto mt-4" />
       </div>
     </div>
   );
@@ -1530,6 +1918,7 @@ export default function Dashboard() {
                 />
               } />
               <Route path="/riwayat" element={<Riwayat />} />
+              <Route path="/finance" element={<FinanceManajemen />} />
               <Route path="/users" element={<UserManajemen />} />
               <Route path="/produk" element={
                 <div className="space-y-12">
@@ -1551,8 +1940,11 @@ export default function Dashboard() {
           {[
             { icon: Home, label: 'Kasir', path: '/' },
             { icon: ClipboardList, label: 'Order', path: '/transaksi', badge: cart.length },
-            ...((user?.role === 'admin' || Number(user?.role_id) === 1) ? [{ icon: Package, label: 'Menu', path: '/produk' }] : []),
             { icon: History, label: 'Laporan', path: '/riwayat' },
+            ...((user?.role === 'admin' || Number(user?.role_id) === 1) ? [
+              { icon: Package, label: 'Menu', path: '/produk' },
+              { icon: Wallet, label: 'Keuangan', path: '/finance' }
+            ] : []),
             { icon: Settings, label: 'Atur', path: '/pengaturan' },
           ].map((item) => {
             const isActive = location.pathname === item.path;
